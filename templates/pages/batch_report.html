@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block title %}{{ batch.title }} - 보고서{% endblock %}
+
+{% block content %}
+<a href="/batches/{{ batch.id }}/"
+    class="no-print inline-flex items-center gap-2 mb-4 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg font-semibold">
+   ← 뒤로가기
+</a>
+<div class="mb-4 flex items-center justify-between">
+  <div>
+    <h1 class="text-3xl font-semibold">{{ batch.title }} - 보고서</h1>
+    {% if summary and summary.generated_at %}
+      <p class="text-sm text-gray-500 mt-1">
+        생성 시각: {{ summary.generated_at|slice:":16" }}
+      </p>
+    {% endif %}
+  </div>
+
+  <div class="flex items-center gap-2">
+    {% if selected_report %}
+    <form
+      method="post"
+      action="{% url 'create_batch_report' batch.id %}"
+      class="inline-flex no-print"
+    >
+      {% csrf_token %}
+      <button
+        type="submit"
+        class="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+      >
+        새 보고서 생성
+      </button>
+    </form>
+  </div>
+</div>
+
+<div class="flex flex-col lg:flex-row gap-4">
+
+   <!-- 왼쪽: 보고서 목록 (사이드바) -->
+  <aside class="report-sidebar w-full lg:w-80 bg-white border rounded-xl p-4 h-max">
+    <div class="text-base font-semibold mb-3">보고서 목록</div>
+
+    {% if reports %}
+      <div class="space-y-2 max-h-[520px] overflow-y-auto">
+        {% for r in reports %}
+          <a
+            href="{% url 'batch_reports' batch.id %}?report_id={{ r.id }}"
+            class="block border rounded px-3 py-2 text-sm hover:bg-gray-50
+            {% if selected_report and r.id == selected_report.id %}
+              bg-blue-50 border-blue-300
+            {% endif %}"
+          >
+            <div class="font-medium truncate">
+              {{ r.title }}
+            </div>
+            <div class="text-xs text-gray-500">
+              {{ r.created_at|date:"Y-m-d H:i" }}
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-sm text-gray-500">
+        아직 생성된 보고서가 없습니다.<br>
+        상단의 <strong>새 보고서 생성</strong> 버튼을 눌러 첫 보고서를 만들어 주세요.
+      </p>
+    {% endif %}
+  </aside>
+
+
+  <!-- 오른쪽: 선택된 보고서 내용 -->
+  <main class="report-main flex-1 space-y-4 text-base md:text-lg">
+    {% if not selected_report %}
+      <div class="bg-white border rounded-xl p-6 text-base text-gray-600">
+        표시할 보고서가 없습니다.<br>
+        좌측 목록에서 보고서를 선택하거나, 새 보고서를 생성해 주세요.
+      </div>
+    {% else %}
+
+      <section class="bg-white border rounded-xl p-4 report-sec report-summary">
+        <h2 class="font-semibold text-2xl mb-3">이미지 추론 결과 요약</h2>
+        <dl class="grid grid-cols-2 md:grid-cols-3 gap-y-2 text-sm">
+          <div class="flex flex-col">
+            <dt class="text-gray-500">총 이미지 수</dt>
+            <dd class="font-semibold">{{ summary.total_images }}</dd>
+          </div>
+          <div class="flex flex-col">
+            <dt class="text-gray-500">불량 이미지 수</dt>
+            <dd class="font-semibold text-red-600">{{ summary.defect_images }}</dd>
+          </div>
+          <div class="flex flex-col">
+            <dt class="text-gray-500">분석된 구간 수</dt>
+            <dd class="font-semibold">{{ summary.segment_count }}</dd>
+          </div>
+        </dl>
+      </section>
+
+
+      
+
+
+
+      <section class="bg-white border rounded-xl p-4 report-sec report-priority print-break-before">
+        <h2 class="font-semibold text-2xl mb-3">
+          우선 보수 추천 구간
+        </h2>
+
+        {% if top_now %}
+          <div class="text-sm mb-3">
+            <div class="font-semibold">
+              {{ top_now.line }} · {{ top_now.from_ic }} → {{ top_now.to_ic }}
+            </div>
+            <p class="text-sm text-gray-600 mt-1">
+              불량 {{ top_now.defect }}개
+              {% if top_now.traffic and top_now.traffic.speed %}
+                · 속도 {{ top_now.traffic.speed }} km/h
+              {% endif %}
+            </p>
+
+            {% if top_now_reason %}
+              <p class="text-sm text-gray-700 mt-2 whitespace-pre-line">
+                {{ top_now_reason }}
+              </p>
+            {% else %}
+              <p class="text-sm text-gray-700 mt-2">
+                위 구간은 불량 차선이 상대적으로 많이 발견된 구간으로,
+                현재 교통 상황을 함께 고려했을 때
+                <strong>우선 보수 대상</strong>으로 분류하는 것이 적절합니다.
+              </p>
+            {% endif %}
+          </div>
+
+          {# 좌: 추론 결과 이미지 / 우: 지도 #}
+          <div class="flex flex-col lg:flex-row gap-4">
+            <div class="flex-1">
+              {% if top_now_previews %}
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3 print-image-grid">
+                  {% for p in top_now_previews %}
+                    <div class="border rounded overflow-hidden bg-black">
+                      <img
+                        src="{{ p.vis_url }}"
+                        alt="{{ p.title }}"
+                        class="w-full aspect-square object-cover"
+                      />
+                    </div>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <p class="text-sm text-gray-500">
+                  이 구간에 연결된 추론 결과 이미지가 없습니다.
+                </p>
+              {% endif %}
+            </div>
+
+            <div class="w-full lg:w-72">
+              <div id="report_map"
+                   style="width:100%; height:220px; border:1px solid #e5e7eb;"></div>
+              <p class="mt-2 text-xs text-gray-500">
+                우선 보수 추천 구간 지도입니다.
+              </p>
+            </div>
+          </div>
+
+        {% else %}
+          <p class="text-base text-gray-500">
+            우선 보수 대상으로 추천할 구간이 없습니다.
+            (불량이 없거나, 분석 가능한 정보가 부족한 경우)
+          </p>
+        {% endif %}
+      </section>
+      <section class="bg-white border rounded-xl p-4 report-sec report-segments">
+        <h2 class="font-semibold text-2xl mb-3">구간별 현황</h2>
+
+        {% if segments %}
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm border">
+              <thead>
+                <tr class="bg-gray-100">
+                  <th class="px-3 py-2 text-left">노선</th>
+                  <th class="px-3 py-2 text-left">구간</th>
+                  <th class="px-3 py-2 text-right">불량 이미지 수</th>
+                  <th class="px-3 py-2 text-right">현재 속도 (km/h)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for seg in segments %}
+                  <tr class="border-b">
+                    <td class="px-3 py-2">{{ seg.line }}</td>
+                    <td class="px-3 py-2">{{ seg.from_ic }} → {{ seg.to_ic }}</td>
+                    <td class="px-3 py-2 text-right">{{ seg.defect }}</td>
+                    <td class="px-3 py-2 text-right">
+                      {% if seg.traffic and seg.traffic.speed %}
+                        {{ seg.traffic.speed }}
+                      {% else %}
+                        -
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="text-base text-gray-500">
+            구간 분석 결과가 없습니다.
+          </p>
+        {% endif %}
+      </section>
+      {% if detail_segments %}
+        <section class="bg-white border rounded-xl p-4 report-sec report-details print-break-before">
+          <h2 class="font-semibold text-2xl mb-3">구간별 상세 이미지</h2>
+          <div class="space-y-4">
+            {% for seg in detail_segments %}
+              <div class="border rounded-lg p-3">
+                <div class="text-sm font-semibold mb-1">
+                  {{ seg.info.line }} · {{ seg.info.from_ic }} → {{ seg.info.to_ic }} ({{ seg.info.direction }})
+                </div>
+                <div class="text-xs text-gray-600 mb-2">
+                  불량 {{ seg.info.defect }}개 / 전체 {{ seg.info.total }}개
+                  (불량 비율 {{ seg.info.defect_ratio|floatformat:1 }}%)
+                  {% if seg.info.traffic and seg.info.traffic.speed %}
+                    · 현재 속도 {{ seg.info.traffic.speed }} km/h
+                  {% endif %}
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 print-image-grid-detail">
+                  {% for p in seg.previews %}
+                    <div class="border rounded overflow-hidden bg-black">
+                      <img
+                        src="{{ p.vis_url }}"
+                        alt="{{ p.title }}"
+                        class="w-full aspect-square object-cover"
+                      />
+                    </div>
+                  {% empty %}
+                    <p class="text-xs text-gray-500 col-span-4">
+                      이 구간에 연결된 불량 이미지가 없습니다.
+                    </p>
+                  {% endfor %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+
+    {% endif %}
+  </main>
+</div>
+
+{# ───────────── Tmap 지도 (우선 보수 구간만) ───────────── #}
+<script src="https://apis.openapi.sk.com/tmap/vectorjs?version=1&appKey=MKaDMDXsqV9vbj4fklbqfU0E7nGvxvywkWG0JU00"></script>
+
+{% if top_now and top_now.sample_coord %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (typeof Tmapv3 === "undefined") {
+      console.warn("[batch_report] Tmapv3 undefined");
+      return;
+    }
+    var lat = {{ top_now.sample_coord.0|default:"0" }};
+    var lon = {{ top_now.sample_coord.1|default:"0" }};
+
+    if (!lat && !lon) {
+      console.warn("[batch_report] no coord for top_now");
+      return;
+    }
+
+    var center = new Tmapv3.LatLng(lat, lon);
+    var map = new Tmapv3.Map("report_map", {
+      center: center,
+      zoom: 14,
+      width: "100%",
+      height: "220px"
+    });
+
+    new Tmapv3.Marker({
+      position: center,
+      map: map,
+      title: "{{ top_now.line }} {{ top_now.from_ic }} → {{ top_now.to_ic }}"
+    });
+  });
+</script>
+{% endif %}
+
+
+{% endblock %}

@@ -1,0 +1,482 @@
+{% extends 'base.html' %}
+{% block title %}{{ batch.title }}{% endblock %}
+{% block content %}
+
+<h1 class="text-xl font-semibold mb-2">{{ batch.title }}</h1>
+<div class="text-sm text-gray-500 mb-4">
+  {{ batch.created_at|date:"Y-m-d H:i" }} • 이미지 {{ images|length }}장
+</div>
+
+<form action="{% url 'infer_batch' batch.id %}" method="post" class="mb-4 flex gap-2">
+  {% csrf_token %}
+  <button class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+    추론 실행
+  </button>
+  <a
+    href="{% url 'batch_reports' batch.id %}"
+    class="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-800 inline-flex items-center"
+  >
+    보고서
+  </a>
+</form>
+
+<!-- 전체 구조 -->
+<div class="flex flex-col lg:flex-row gap-4">
+  <!-- 왼쪽: 이미지 리스트 -->
+  <div class="lg:w-1/3 bg-white border rounded-xl p-4 overflow-y-auto max-h-[600px]">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold">이미지 목록</h2>
+
+      <div class="flex items-center gap-2">
+        <!-- 필터 아이콘 -->
+        <div class="relative">
+          <button id="btn-filter" type="button" class="p-2 rounded hover:bg-gray-100" aria-label="필터">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                    d="M3 4h18M6 8h12M9 12h6M11 16h2" />
+            </svg>
+          </button>
+
+          <!-- 필터 메뉴 (체크박스) -->
+          <div id="menu-filter" class="hidden absolute right-0 mt-2 w-40 bg-white border rounded shadow">
+            <form id="filter-form" class="p-2 space-y-1">
+              <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="status" value="OK"  {% if status_filter == 'OK' or status_filter == 'ALL_OK' %}checked{% endif %}>
+                <span>정상</span>
+              </label>
+              <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="status" value="BAD" {% if status_filter == 'BAD' or status_filter == 'ALL_BAD' %}checked{% endif %}>
+                <span>불량</span>
+              </label>
+              <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="status" value="WAIT" {% if status_filter == 'WAIT' or status_filter == 'ALL_WAIT' %}checked{% endif %}>
+                <span>대기</span>
+              </label>
+              <div class="flex justify-end gap-2 pt-2">
+                <button type="button" id="filter-reset" class="text-xs text-gray-600">초기화</button>
+                <button type="button" id="filter-apply" class="px-2 py-1 bg-blue-600 text-white text-xs rounded">적용</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- 정렬 아이콘 -->
+        <div class="relative">
+          <button id="btn-sort" type="button" class="p-2 rounded hover:bg-gray-100" aria-label="정렬">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                    d="M8 7l4-4 4 4M8 17l4 4 4-4" />
+            </svg>
+          </button>
+
+          <!-- 정렬 메뉴 -->
+          <div id="menu-sort" class="hidden absolute right-0 mt-2 w-44 bg-white border rounded shadow">
+            <div class="p-2">
+              <button data-sort="recent" class="w-full text-left px-2 py-1 text-sm rounded hover:bg-gray-100 {% if sort_option == 'recent' %}bg-gray-100 font-medium{% endif %}">
+                최신순
+              </button>
+              <button data-sort="oldest"
+                class="w-full text-left px-2 py-1 text-sm rounded hover:bg-gray-100 {% if sort_option == 'oldest' %}bg-gray-100 font-medium{% endif %}">
+                오래된순
+              </button>
+              <button data-sort="congestion_high" class="w-full text-left px-2 py-1 text-sm rounded hover:bg-gray-100 {% if sort_option == 'congestion_high' %}bg-gray-100 font-medium{% endif %}">
+                혼잡도 높은 순
+              </button>
+              <button data-sort="congestion_low" class="w-full text-left px-2 py-1 text-sm rounded hover:bg-gray-100 {% if sort_option == 'congestion_low' %}bg-gray-100 font-medium{% endif %}">
+                혼잡도 낮은 순
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 이미지 리스트 -->
+    {% for it in images %}
+      <div
+        class="flex items-center gap-3 border-b py-2 hover:bg-gray-50 transition cursor-pointer image-row"
+        data-image-id="{{ it.id }}"
+        data-original="{{ it.file.url }}"
+        data-vis="{% if it.status and it.status != 'WAIT' %}/media/inference/batch_{{ batch.id }}/vis/{{ it.id }}.jpg{% endif %}"
+        data-lat="{{ it.lat|default_if_none:'' }}"
+        data-lon="{{ it.lon|default_if_none:'' }}"
+        data-title="{{ it.title|default:it.file.name }}"
+        data-status="{{ it.status|default:'' }}"
+      >
+        <img
+          src="{{ it.file.url }}"
+          loading="lazy"
+          decoding="async"
+          width="64"
+          height="64"
+          class="w-16 h-16 object-cover rounded"
+          alt=""
+        >
+
+        <div class="flex-1 text-sm">
+          <div class="font-medium truncate">
+            {{ it.title|default:it.file.name }}
+          </div>
+          <div class="text-xs text-gray-500">
+            {{ it.uploaded_at|date:"Y-m-d H:i" }}
+          </div>
+          <div class="flex gap-2 mt-1">
+            {% if it.status == "OK" %}
+              <span class="px-2 py-0.5 rounded text-xs bg-green-100 text-green-800">정상</span>
+            {% elif it.status == "BAD" %}
+              <span class="px-2 py-0.5 rounded text-xs bg-red-100 text-red-800">불량</span>
+            {% else %}
+              <span class="px-2 py-0.5 rounded text-xs bg-yellow-100 text-yellow-800">대기</span>
+            {% endif %}
+            {% if it.congestion %}
+              <span class="text-xs text-gray-600">
+                혼잡도: {{ it.congestion|floatformat:2 }}
+              </span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    {% empty %}
+      <div class="text-sm text-gray-500">이미지가 없습니다.</div>
+    {% endfor %}
+  </div>
+
+  <!-- 오른쪽: 지도 -->
+  <div class="flex-1 bg-white border rounded-xl p-4">
+    <h2 class="font-semibold mb-2">지도 시각화</h2>
+    <div id="map_div" style="width:100%; height:500px; border:1px solid #ccc;"></div>
+
+    <!-- 결과 요약 -->
+    <div class="mt-4 text-sm">
+      <div class="font-semibold mb-2">추론 요약</div>
+      <div class="flex gap-4">
+        <span class="px-2 py-1 rounded bg-green-100 text-green-800">정상: {{ ok_count }}</span>
+        <span class="px-2 py-1 rounded bg-red-100 text-red-800">불량: {{ bad_count }}</span>
+        <span class="px-2 py-1 rounded bg-yellow-100 text-yellow-800">대기: {{ wait_count }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tmap SDK -->
+<script src="https://apis.openapi.sk.com/tmap/vectorjs?version=1&appKey=MKaDMDXsqV9vbj4fklbqfU0E7nGvxvywkWG0JU00"></script>
+
+<!-- 지도 + 마커 (한 번만) -->
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const points = {{ points_json|default:"[]"|safe }};  // [{id,lat,lon,name,status}, ...]
+
+    if (!Array.isArray(points) || points.length === 0 || typeof Tmapv3 === "undefined") {
+      console.warn("[batch_detail] no points or Tmapv3 undefined");
+      return;
+    }
+
+    let center = new Tmapv3.LatLng(points[0].lat, points[0].lon);
+
+    const map = new Tmapv3.Map("map_div", {
+      center,
+      zoom: 14,
+      width: "100%",
+      height: "500px",
+    });
+
+    // bounds 맞추기
+    if (points.length > 1) {
+      const bounds = new Tmapv3.LatLngBounds();
+      points.forEach(p => bounds.extend(new Tmapv3.LatLng(p.lat, p.lon)));
+      map.fitBounds(bounds);
+    }
+
+    // 리스트에서 좌표 줌 이동에 쓸 함수
+    window.focusOnLatLon = function (lat, lon) {
+      const latNum = parseFloat(lat);
+      const lonNum = parseFloat(lon);
+      if (isNaN(latNum) || isNaN(lonNum)) return;
+      const pos = new Tmapv3.LatLng(latNum, lonNum);
+      map.setCenter(pos);
+      map.setZoom(17);
+    };
+
+    // 마커 클릭 시 → 해당 image-row 클릭
+    window.__onBatchMarkerClick = function (id) {
+      const row = document.querySelector(`.image-row[data-image-id="${id}"]`);
+      if (!row) {
+        console.warn("[batch_detail] no row for id:", id);
+        return;
+      }
+      row.click();
+    };
+
+    // 마커 생성
+    points.forEach(p => {
+      const color =
+        p.status === "BAD"  ? "red"   :
+        p.status === "OK"   ? "green" :
+        p.status === "WAIT" ? "gray"  :
+        "yellow";
+
+      const tooltip = `${p.name} (${p.status || "N/A"})`;
+
+      new Tmapv3.Marker({
+        position: new Tmapv3.LatLng(p.lat, p.lon),
+        map: map,
+        title: tooltip,
+        iconHTML: `
+          <div
+            title="${tooltip}"
+            style="
+              width:15px;
+              height:15px;
+              border-radius:50%;
+              background:${color};
+              border:2px solid white;
+              box-shadow:0 0 3px rgba(0,0,0,0.5);
+              cursor:pointer;
+            "
+            onclick="window.__onBatchMarkerClick(${p.id})"
+          ></div>
+        `,
+      });
+    });
+  });
+</script>
+
+<!-- 필터/정렬 스크립트 (기존 로직 유지) -->
+<script>
+  const $  = (s) => document.querySelector(s);
+  const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+  function currentURL() { return new URL(window.location.href); }
+  function closeAll(){ $("#menu-filter")?.classList.add("hidden"); $("#menu-sort")?.classList.add("hidden"); }
+
+  $("#btn-filter")?.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    $("#menu-filter")?.classList.toggle("hidden");
+    $("#menu-sort")?.classList.add("hidden");
+  });
+  $("#btn-sort")?.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    $("#menu-sort")?.classList.toggle("hidden");
+    $("#menu-filter")?.classList.add("hidden");
+  });
+
+  $("#menu-filter")?.addEventListener("click", (e)=> e.stopPropagation());
+  $("#menu-sort")?.addEventListener("click", (e)=> e.stopPropagation());
+  document.addEventListener("click", closeAll);
+
+  (function initFilterFromURL(){
+    const url = currentURL();
+    const single = url.searchParams.get("status");
+    const multi  = url.searchParams.getAll("status[]");
+
+    $$('#menu-filter input[name="status"]').forEach(i => i.checked = false);
+
+    let actives = new Set();
+    if (multi.length) {
+      multi.forEach(v => actives.add(v.toUpperCase()));
+    } else if (single && single !== "ALL") {
+      actives.add(single.toUpperCase());
+    } else {
+      actives = new Set(["OK","BAD","WAIT"]);
+    }
+
+    $$('#menu-filter input[name="status"]').forEach(i=>{
+      if (actives.has(i.value.toUpperCase())) i.checked = true;
+    });
+  })();
+
+  function removeStatusParams(url){
+    url.searchParams.delete("status");
+    url.searchParams.delete("status[]");
+  }
+
+  $("#filter-apply")?.addEventListener("click", ()=>{
+    const url = currentURL();
+    removeStatusParams(url);
+
+    const checked = $$('#menu-filter input[name="status"]:checked').map(i=>i.value.toUpperCase());
+
+    if (checked.length === 0 || checked.length === 3) {
+      url.searchParams.set("status", "ALL");
+    } else if (checked.length === 1) {
+      url.searchParams.set("status", checked[0]);
+    } else {
+      checked.forEach(v => url.searchParams.append("status[]", v));
+    }
+
+    closeAll();
+    window.location.assign(url.toString());
+  });
+
+  $("#filter-reset")?.addEventListener("click", ()=>{
+    const url = currentURL();
+    removeStatusParams(url);
+    url.searchParams.set("status", "ALL");
+    closeAll();
+    window.location.assign(url.toString());
+  });
+
+  $("#menu-sort")?.querySelectorAll("button[data-sort]")?.forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const url = currentURL();
+      url.searchParams.set("sort", btn.getAttribute("data-sort"));
+      closeAll();
+      window.location.assign(url.toString());
+    });
+  });
+</script>
+
+<!-- 이미지 확대 모달 -->
+<div
+  id="imageModal"
+  class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center"
+>
+  <div class="bg-white rounded-xl shadow-xl max-w-4xl w-[90%] max-h-[90%] flex flex-col">
+    <!-- 상단 바 -->
+    <div class="flex items-center justify-between px-4 py-2 border-b">
+      <div class="flex gap-2 text-sm">
+        <button
+          id="btnShowOriginal"
+          class="px-3 py-1 rounded bg-blue-600 text-white text-xs"
+        >
+          원본
+        </button>
+        <button
+          id="btnShowOverlay"
+          class="px-3 py-1 rounded bg-gray-200 text-gray-800 text-xs"
+        >
+          추론 결과
+        </button>
+      </div>
+      <button
+        id="btnModalClose"
+        class="text-gray-500 hover:text-black text-xl leading-none"
+      >
+        ✕
+      </button>
+    </div>
+
+    <!-- 이미지 영역 -->
+    <div class="flex-1 overflow-auto bg-black flex items-center justify-center">
+      <img
+        id="modalOriginal"
+        src=""
+        class="max-w-full max-h-[80vh] object-contain"
+        alt="원본"
+      />
+      <img
+        id="modalOverlay"
+        src=""
+        class="max-w-full max-h-[80vh] object-contain hidden"
+        alt="추론 결과"
+      />
+    </div>
+  </div>
+</div>
+
+<!-- 모달 동작: 이미지 클릭 + 지도 마커 클릭 둘 다 여기로 온다 -->
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const rows       = document.querySelectorAll(".image-row");
+    const modal      = document.getElementById("imageModal");
+    const btnClose   = document.getElementById("btnModalClose");
+    const btnOrig    = document.getElementById("btnShowOriginal");
+    const btnOverlay = document.getElementById("btnShowOverlay");
+    const imgOrig    = document.getElementById("modalOriginal");
+    const imgOverlay = document.getElementById("modalOverlay");
+
+    let hasOverlay = false;
+
+    function setButtonState(showOverlay) {
+      const canShowOverlay = showOverlay && hasOverlay;
+
+      if (canShowOverlay) {
+        imgOrig.classList.add("hidden");
+        imgOverlay.classList.remove("hidden");
+
+        btnOverlay.classList.add("bg-blue-600", "text-white");
+        btnOverlay.classList.remove("bg-gray-200", "text-gray-800");
+
+        btnOrig.classList.remove("bg-blue-600", "text-white");
+        btnOrig.classList.add("bg-gray-200", "text-gray-800");
+      } else {
+        imgOrig.classList.remove("hidden");
+        imgOverlay.classList.add("hidden");
+
+        btnOrig.classList.add("bg-blue-600", "text-white");
+        btnOrig.classList.remove("bg-gray-200", "text-gray-800");
+
+        btnOverlay.classList.remove("bg-blue-600", "text-white");
+        btnOverlay.classList.add("bg-gray-200", "text-gray-800");
+      }
+
+      if (!hasOverlay) {
+        btnOverlay.classList.add("opacity-40", "cursor-not-allowed");
+        btnOverlay.disabled = true;
+      } else {
+        btnOverlay.classList.remove("opacity-40", "cursor-not-allowed");
+        btnOverlay.disabled = false;
+      }
+    }
+
+    function openModal(originalUrl, overlayUrl) {
+      if (!originalUrl) return;
+
+      const trimmedOverlay = (overlayUrl || "").trim();
+      hasOverlay = !!trimmedOverlay;
+
+      imgOrig.src = originalUrl;
+      if (hasOverlay) {
+        imgOverlay.src = trimmedOverlay;
+      } else {
+        imgOverlay.src = "";
+      }
+
+      // 오버레이 있으면 → 추론 결과 먼저, 없으면 → 원본
+      setButtonState(hasOverlay);
+
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    }
+
+    function closeModal() {
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+
+    // 리스트 이미지 클릭 → 지도 줌 + 모달
+    rows.forEach((r) => {
+      r.addEventListener("click", () => {
+        const originalUrl = r.dataset.original || "";
+        const visUrl      = r.dataset.vis || "";
+        const lat         = r.dataset.lat;
+        const lon         = r.dataset.lon;
+
+        // 좌표 있으면 지도 이동
+        if (lat && lon && typeof window.focusOnLatLon === "function") {
+          window.focusOnLatLon(lat, lon);
+        }
+
+        openModal(originalUrl, visUrl);
+      });
+    });
+
+    // 닫기 버튼 / 바깥 영역
+    btnClose?.addEventListener("click", closeModal);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeModal();
+    });
+
+    // 원본 / 추론 결과 버튼
+    btnOrig?.addEventListener("click", () => {
+      setButtonState(false);
+    });
+
+    btnOverlay?.addEventListener("click", () => {
+      if (!hasOverlay) return;
+      setButtonState(true);
+    });
+  });
+</script>
+
+{% endblock %}

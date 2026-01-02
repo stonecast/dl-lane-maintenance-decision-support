@@ -1,0 +1,306 @@
+{% extends 'base.html' %}
+{% block title %}대시보드{% endblock %}
+{% block content %}
+
+<!-- 상단 카드 4개 -->
+<div class="grid md:grid-cols-4 gap-4 mb-6">
+  <div class="bg-white border rounded-xl p-4 flex items-center justify-between">
+    <div>
+      <div class="text-sm text-gray-500">업로드된 이미지</div>
+      <div class="text-2xl font-bold mt-1">{{ total_uploaded }}건</div>
+    </div>
+  </div>
+  <div class="bg-white border rounded-xl p-4 flex items-center justify-between">
+    <div>
+      <div class="text-sm text-gray-500">추론 완료된 이미지</div>
+      <div class="text-2xl font-bold mt-1">{{ infer_done }}건</div>
+    </div>
+  </div>
+  <div class="bg-white border rounded-xl p-4 flex items-center justify-between">
+    <div>
+      <div class="text-sm text-gray-500">위험 감지</div>
+      <div class="text-2xl font-bold mt-1 text-red-600">{{ danger_count }}건</div>
+    </div>
+  </div>
+  <div class="bg-white border rounded-xl p-4 flex items-center justify-between">
+    <div>
+      <div class="text-sm text-gray-500">생성된 보고서</div>
+      <div class="text-2xl font-bold mt-1">{{ report_count }}개</div>
+    </div>
+  </div>
+</div>
+
+<!-- 지도 섹션 -->
+<div class="bg-white border rounded-xl p-4 mb-6">
+  <div class="flex items-center justify-between mb-2">
+    <h2 class="font-semibold text-lg mb-4">
+      마지막 업로드 배치
+      {% if latest_batch %}
+        <span class="text-sm text-gray-500">({{ latest_batch.title }})</span>
+      {% endif %}
+    </h2>
+
+    <select id="statusFilter" class="border px-2 py-1 rounded text-sm">
+      <option value="ALL">전체</option>
+      <option value="OK">정상</option>
+      <option value="BAD">위험</option>
+    </select>
+  </div>
+
+  <div id="map_div" style="width:100%; height:800px; border:1px solid #ccc;"></div>
+</div>
+
+<!-- Tmap SDK -->
+<script src="https://apis.openapi.sk.com/tmap/vectorjs?version=1&appKey=MKaDMDXsqV9vbj4fklbqfU0E7nGvxvywkWG0JU00"></script>
+
+<!-- 이미지 모달 -->
+<div
+  id="imageModal"
+  class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center"
+>
+  <div class="bg-white rounded-xl shadow-xl max-w-4xl w-[90%] max-h-[90%] flex flex-col">
+    <!-- 상단 바 -->
+    <div class="flex items-center justify-between px-4 py-2 border-b">
+      <div class="flex gap-2 text-sm">
+        <button
+          id="btnShowOriginal"
+          class="px-3 py-1 rounded bg-blue-600 text-white text-xs"
+        >
+          원본
+        </button>
+        <button
+          id="btnShowOverlay"
+          class="px-3 py-1 rounded bg-gray-200 text-gray-800 text-xs"
+        >
+          추론 결과
+        </button>
+      </div>
+      <button
+        id="btnModalClose"
+        class="text-gray-500 hover:text-black text-xl leading-none"
+      >
+        ✕
+      </button>
+    </div>
+
+    <!-- 이미지 영역 -->
+    <div class="flex-1 overflow-auto bg-black flex items-center justify-center">
+      <img
+        id="modalOriginal"
+        src=""
+        class="max-w-full max-h-[80vh] object-contain"
+        alt="원본"
+      />
+      <img
+        id="modalOverlay"
+        src=""
+        class="max-w-full max-h-[80vh] object-contain hidden"
+        alt="추론 결과"
+      />
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // 백엔드에서 넘어온 포인트들
+    const points = JSON.parse('{{ points_json|default:"[]"|escapejs }}');
+
+    // --- 모달 관련 요소 ---
+    const modal      = document.getElementById("imageModal");
+    const btnClose   = document.getElementById("btnModalClose");
+    const btnOrig    = document.getElementById("btnShowOriginal");
+    const btnOverlay = document.getElementById("btnShowOverlay");
+    const imgOrig    = document.getElementById("modalOriginal");
+    const imgOverlay = document.getElementById("modalOverlay");
+
+    let hasOverlay = false;
+
+    function setButtonState(showOverlay) {
+      const canShowOverlay = showOverlay && hasOverlay;
+
+      if (canShowOverlay) {
+        imgOrig.classList.add("hidden");
+        imgOverlay.classList.remove("hidden");
+
+        btnOverlay.classList.add("bg-blue-600", "text-white");
+        btnOverlay.classList.remove("bg-gray-200", "text-gray-800");
+
+        btnOrig.classList.remove("bg-blue-600", "text-white");
+        btnOrig.classList.add("bg-gray-200", "text-gray-800");
+      } else {
+        imgOrig.classList.remove("hidden");
+        imgOverlay.classList.add("hidden");
+
+        btnOrig.classList.add("bg-blue-600", "text-white");
+        btnOrig.classList.remove("bg-gray-200", "text-gray-800");
+
+        btnOverlay.classList.remove("bg-blue-600", "text-white");
+        btnOverlay.classList.add("bg-gray-200", "text-gray-800");
+      }
+
+      if (!hasOverlay) {
+        btnOverlay.classList.add("opacity-40", "cursor-not-allowed");
+        btnOverlay.disabled = true;
+      } else {
+        btnOverlay.classList.remove("opacity-40", "cursor-not-allowed");
+        btnOverlay.disabled = false;
+      }
+    }
+
+    // 🔹 특정 포인트(p)에 대해 모달 열기
+    function openModalForPoint(p) {
+      const originalUrl = p.original_url || "";
+      const overlayUrl  = p.vis_url || "";
+
+      if (!originalUrl) return;
+
+      hasOverlay = !!(p.has_vis && overlayUrl.trim() !== "");
+
+      imgOrig.src    = originalUrl;
+      imgOverlay.src = hasOverlay ? overlayUrl : "";
+
+      setButtonState(hasOverlay);
+
+      if (!modal) return;
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    }
+
+    function closeModal() {
+      if (!modal) return;
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+
+    // 모달 버튼 이벤트
+    if (btnClose) {
+      btnClose.addEventListener("click", closeModal);
+    }
+    if (modal) {
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeModal();
+      });
+    }
+    if (btnOrig) {
+      btnOrig.addEventListener("click", () => setButtonState(false));
+    }
+    if (btnOverlay) {
+      btnOverlay.addEventListener("click", () => {
+        if (!hasOverlay) return;
+        setButtonState(true);
+      });
+    }
+
+    // =========================
+    //   지도 + 마커 클릭 이벤트
+    // =========================
+
+    if (typeof Tmapv3 === "undefined") {
+      console.error("Tmapv3 is undefined (SDK 로딩 오류)");
+      return;
+    }
+
+    console.log("[dashboard] points:", points);
+
+    if (!Array.isArray(points) || points.length === 0) {
+      // 포인트가 없으면 지도만 표시 안 함
+      return;
+    }
+
+    let center = new Tmapv3.LatLng(points[0].lat, points[0].lon);
+
+    const map = new Tmapv3.Map("map_div", {
+      center,
+      zoom: 14,
+      width: "100%",
+      height: "800px",
+    });
+
+    if (points.length > 1) {
+      const bounds = new Tmapv3.LatLngBounds();
+      points.forEach(p => bounds.extend(new Tmapv3.LatLng(p.lat, p.lon)));
+      map.fitBounds(bounds);
+    }
+
+    // 🔹 id → point 매핑
+    const pointMap = {};
+    points.forEach(p => {
+      if (p.id != null) {
+        pointMap[p.id] = p;
+      }
+    });
+
+    // 🔹 전역에서 접근할 수 있는 클릭 핸들러
+    window.__onDashboardMarkerClick = function (id) {
+      const p = pointMap[id];
+      if (!p) return;
+      console.log("[dashboard] marker click:", id, p);
+      openModalForPoint(p);
+    };
+
+    // 🔹 마커 찍기 (아이콘 HTML 안에 onclick 직접 넣기)
+    points.forEach(p => {
+      const color =
+        p.status === "BAD"  ? "red"   :
+        p.status === "OK"   ? "green" :
+        p.status === "WAIT" ? "gray"  :
+        "yellow";
+
+      const tooltip = `${p.name} (${p.status || "N/A"})`;
+
+      new Tmapv3.Marker({
+        position: new Tmapv3.LatLng(p.lat, p.lon),
+        map: map,
+        title: tooltip,
+        iconHTML: `
+          <div
+            title="${tooltip}"
+            style="
+              width:15px;
+              height:15px;
+              border-radius:50%;
+              background:${color};
+              border:2px solid white;
+              box-shadow:0 0 3px rgba(0,0,0,0.5);
+              cursor:pointer;
+            "
+            onclick="window.__onDashboardMarkerClick(${p.id})"
+          ></div>
+        `,
+      });
+    });
+  });
+</script>
+
+
+<!-- 최근 업로드 배치 -->
+<div class="bg-white border rounded-xl p-4">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="font-semibold text-lg">최근 업로드 배치</h2>
+    <a href="/batches/" class="text-sm text-blue-700 hover:underline">전체 보기</a>
+  </div>
+  <div class="grid sm:grid-cols-2 md:grid-cols-6 gap-4">
+    {% for b in recent_batches %}
+    <a href="/batches/{{ b.id }}/" class="border rounded-xl p-4 hover:shadow transition">
+      <div class="font-medium line-clamp-2">{{ b.title }}</div>
+      <div class="text-xs text-gray-500 mt-1">{{ b.created_at|date:"Y-m-d H:i" }}</div>
+      <div class="mt-2 text-sm">
+        <span class="px-2 py-0.5 rounded bg-gray-100 text-gray-700">이미지 {{ b.images.count }}장</span>
+        {% if b.status == "READY" %}
+          <span class="ml-1 px-2 py-0.5 rounded bg-gray-200 text-gray-800">준비중</span>
+        {% elif b.status == "RUNNING" %}
+          <span class="ml-1 px-2 py-0.5 rounded bg-yellow-100 text-yellow-800">추론중</span>
+        {% elif b.status == "DONE" %}
+          <span class="ml-1 px-2 py-0.5 rounded bg-green-100 text-green-800">추론 완료</span>
+        {% endif %}
+      </div>
+    </a>
+    {% empty %}
+    <div class="text-sm text-gray-500">아직 배치가 없습니다.</div>
+    {% endfor %}
+  </div>
+</div>
+
+{% endblock %}
+<!-- {{ images|length }} -->

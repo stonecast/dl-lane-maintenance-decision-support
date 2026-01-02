@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}배치 목록{% endblock %}
+{% block content %}
+
+<h1 class="text-xl font-semibold mb-4">배치 목록</h1>
+
+<div class="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
+  {% for b in batches %}
+  <a href="{% url 'batch_detail' b.id %}" class="border rounded-xl bg-white overflow-hidden hover:shadow transition">
+    <!-- 썸네일
+    {% if b.thumbnail %}
+      <img src="{{ b.thumbnail.url }}" class="w-full h-40 object-cover">
+    {% else %}
+      <div class="w-full h-40 flex items-center justify-center bg-gray-100 text-gray-400 text-sm">
+        No Image
+      </div>
+    {% endif %} -->
+    <div class="p-3">
+      <div class="font-semibold truncate">{{ b.title }}</div>
+      <div class="text-xs text-gray-500 mt-1">{{ b.created_at|date:"Y-m-d H:i" }}</div>
+    </div>
+  </a>
+  {% empty %}
+  <div class="text-sm text-gray-500">배치가 없습니다.</div>
+  {% endfor %}
+</div>
+
+{% endblock %}

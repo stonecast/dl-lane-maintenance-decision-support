@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block title %}업로드{% endblock %}
+{% block content %}
+
+<h1 class="text-xl font-semibold mb-4">업로드</h1>
+
+<form method="post"
+      action="{% url 'upload' %}"
+      enctype="multipart/form-data"
+      class="bg-white border rounded-xl p-4 space-y-4">
+  {% csrf_token %}
+
+  <div>
+    <label class="font-medium">배치 모드</label>
+    <div class="mt-2 space-y-1">
+      {{ form.mode }}
+    </div>
+  </div>
+
+  <div id="new-batch" class="space-y-1">
+    <label class="block text-sm text-gray-700">배치 이름</label>
+    {{ form.title }}
+    <p class="text-xs text-gray-500">예: 2025/11/10 봉담IC 촬영본</p>
+  </div>
+
+  <div id="existing-batch" class="space-y-1">
+    <label class="block text-sm text-gray-700">기존 배치</label>
+    {{ form.batch }}
+  </div>
+
+  <!-- 이미지 업로드 -->
+  <div class="space-y-1">
+    <label class="block text-sm text-gray-700">이미지 파일</label>
+    <input type="file" name="files" multiple
+           class="border rounded p-2 w-full"
+           accept=".jpg,.jpeg,.png,.tif,.tiff" />
+    <p class="text-xs text-gray-500">여러 개를 한 번에 선택할 수 있습니다.</p>
+  </div>
+
+  <!-- ✅ 메타데이터 업로드 (선택) -->
+  <div class="space-y-1">
+    <label class="block text-sm text-gray-700">메타데이터 파일 (선택)</label>
+    <input type="file" name="meta_file"
+           class="border rounded p-2 w-full"
+           accept=".csv,.tsv,.txt" />
+    <p class="text-xs text-gray-500">
+      FileName / latitude / longitude 열이 포함된 CSV/TSV 파일을 올리면
+      이미지와 자동으로 매핑해서 지도에 표시합니다.
+    </p>
+  </div>
+
+  {% if form.errors %}
+  <div class="text-sm text-red-600">
+    {{ form.errors }}
+  </div>
+  {% endif %}
+
+  <button class="px-4 py-2 rounded bg-blue-600 text-white">업로드 시작</button>
+</form>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const radios = document.querySelectorAll('input[name="mode"]');
+    const newBox = document.getElementById("new-batch");
+    const exBox  = document.getElementById("existing-batch");
+
+    function sync() {
+      const checked = document.querySelector('input[name="mode"]:checked');
+      const val = checked ? checked.value : "new";
+      newBox.style.display = (val === "new") ? "block" : "none";
+      exBox.style.display  = (val === "existing") ? "block" : "none";
+    }
+    radios.forEach(r => r.addEventListener("change", sync));
+    sync();
+  });
+</script>
+
+{% endblock %}
