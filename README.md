@@ -77,7 +77,6 @@ TMAP API
 <br>
         <img width="300" height="500" alt="image" src="https://github.com/user-attachments/assets/eaa70172-c7dc-4811-8175-f71eb945495a" />
 
-<br>
 
 1. Model_1  
     첫 번째 모델은 도로 이미지에서 차선 영역을 검출합니다.
@@ -86,9 +85,11 @@ TMAP API
     차선은 형태적 특징이 비교적 명확하여 안정적인 성능을 확보할 수 있었습니다.
   
     IoU (Lane) : 92.8%
+   
     <br>
     <img width="600" height="350" alt="image" src="https://github.com/user-attachments/assets/952fc34e-e958-4c5a-949b-99c74f5daed0" />
 
+<br>
 
 2. Model_2  
     두 번째 모델은 차선 내부의 결함 영역을 Segmentation합니다.
@@ -99,7 +100,7 @@ TMAP API
     <br>
     <img width="600" height="350" alt="image" src="https://github.com/user-attachments/assets/5f93dd8b-248b-4ca1-a5f3-18c855459c6a" />
   
-  <br>
+<br>
 
 두 모델의 결과를 결합하여 차선별 결함 비율을 계산하고, 
 사용자가 설정한 임계값을 초과하는 경우 불량 차선으로 판단하였습니다.
@@ -108,7 +109,7 @@ TMAP API
 2. 결함 세그멘테이션 결과 중 차선 영역에 해당하는 픽셀만 선택
 3. 하나의 차선 영역 내에서 결함 픽셀 비율을 계산
 4. 결함 비율이 사용자가 설정한 임계값을 초과할 경우   해당 차선을 불량 차선으로 판단
-
+<br><br>
 <img width="600" height="350" alt="image" src="https://github.com/user-attachments/assets/130c06d7-cbc9-4449-a420-0db90391f3b4" />
 
 <br>
