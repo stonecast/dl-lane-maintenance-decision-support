@@ -5,8 +5,7 @@
 딥러닝 기반 영상처리를 활용하여 차선 상태를 분석하고
 유지보수 우선순위를 제안하는 시스템을 구현한 학부 프로젝트입니다.
 
-## 담당 역할
-
+### 담당 역할
 - Python 기반 딥러닝 모델 구현 및 학습
 - 데이터 전처리 및 라벨링 기준 수립
 - Django 기반 웹 시스템 구현
@@ -16,24 +15,12 @@
 
 ---
 
-## 사용 기술
-
-Python
-
-PyTorch
-
-OpenCV
-
-Django
-
-SQLite
-
-TMAP API
+### 사용 기술
+Python | PyTorch | OpenCV | Django | SQLite | TMAP API
 
 ---
 
 ## 전체 시스템 흐름 
-
 도로 이미지 업로드부터 딥러닝 추론, 지도 기반 결과 시각화, 유지보수 우선순위 보고서 생성까지 하나의 워크플로우로 구성하였습니다.
 (순서도 추가)
 
@@ -78,25 +65,29 @@ TMAP API
         <img width="300" height="500" alt="image" src="https://github.com/user-attachments/assets/eaa70172-c7dc-4811-8175-f71eb945495a" />
 
 
-1. Model_1  
+1. Model 1 : Lane Segmentation
+        
     첫 번째 모델은 도로 이미지에서 차선 영역을 검출합니다.
   
     약 16,000장의 차선 Polygon 데이터로 학습하였으며, 
     차선은 형태적 특징이 비교적 명확하여 안정적인 성능을 확보할 수 있었습니다.
   
-    IoU (Lane) : 92.8%
+    IoU (Lane Segmentation) : 92.8%
    
     <br>
     <img width="600" height="350" alt="image" src="https://github.com/user-attachments/assets/952fc34e-e958-4c5a-949b-99c74f5daed0" />
 
 <br>
 
-2. Model_2  
+2. Model 2 : Defect Segmentation
+
     두 번째 모델은 차선 내부의 결함 영역을 Segmentation합니다.
   
     결함 데이터는 직접 라벨링이 필요한 데이터였으며,
     학습 데이터의 수가 제한적이어서 Lane Segmentation에 비해 제한적인 성능을 보였습니다.
-  
+   
+    IoU (Defect Segmentation): 64.7%
+
     <br>
     <img width="600" height="350" alt="image" src="https://github.com/user-attachments/assets/5f93dd8b-248b-4ca1-a5f3-18c855459c6a" />
   
@@ -173,3 +164,9 @@ default admin's id == admin / dldnjstjr123
 ```
 TMAP_APP_KEY = "TMAP API KEY"
 ```
+
+---
+
+프로젝트 기간: 2025.08 ~ 2025.11
+
+프로젝트 인원: 2명
